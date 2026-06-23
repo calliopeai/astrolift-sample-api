@@ -12,21 +12,8 @@ name: Build and Publish Sample API Image
 on:
   push:
     branches: [main]
-    paths:
-      - "app/**"
-      - "worker/**"
-      - "entrypoint.py"
-      - "requirements.txt"
-      - "Dockerfile"
-      - ".github/workflows/build.yml"
-  pull_request:
-    paths:
-      - "app/**"
-      - "worker/**"
-      - "entrypoint.py"
-      - "requirements.txt"
-      - "Dockerfile"
   workflow_dispatch:
+
 
 env:
   REGISTRY_DOCKERHUB: docker.io
