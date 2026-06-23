@@ -1,0 +1,75 @@
+name: Build and Publish Sample API Image
+
+# Builds astrolift-sample-api and pushes to Docker Hub. Single image
+# serving both the web + worker workloads (the manifest container
+# `command` selects the mode at runtime). Mirrors the build/login/push
+# shape of astrolift-agents/.github/workflows/build-images.yml: deterministic
+# `main-<sha7>` tags for deploy (no bare `latest` for deploy — campaign
+# blocker B3) plus a `latest` convenience tag, pushed only on `main`.
+#
+# Uses the org-level secrets DOCKERHUB_USERNAME / DOCKERHUB_TOKEN
+# (visibility=ALL — inherited by every calliopeai repo).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "worker/**"
+      - "entrypoint.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "worker/**"
+      - "entrypoint.py"
+      - "requirements.txt"
+      - "Dockerfile"
+  workflow_dispatch:
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  NAMESPACE: calliopeai
+  IMAGE: astrolift-sample-api
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: tags
+        run: |
+          echo "sha=main-${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "push=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "push=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Docker Hub
+        if: steps.tags.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg "GIT_SHA=${GITHUB_SHA}" \
+            -t "${REGISTRY_DOCKERHUB}/${NAMESPACE}/${IMAGE}:${{ steps.tags.outputs.sha }}" \
+            -t "${REGISTRY_DOCKERHUB}/${NAMESPACE}/${IMAGE}:latest" \
+            .
+
+      - name: Push tags (Docker Hub)
+        if: steps.tags.outputs.push == 'true'
+        run: |
+          for tag in "${{ steps.tags.outputs.sha }}" latest; do
+            docker push "${REGISTRY_DOCKERHUB}/${NAMESPACE}/${IMAGE}:${tag}"
+          done

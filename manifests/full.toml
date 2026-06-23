@@ -1,0 +1,70 @@
+# sample-api / full — + all four (postgres+redis+queue+object store) — the full fan-out; the worker renders queued jobs to S3.
+name = "sample-api-full"
+
+[[workloads]]
+name = "web"
+kind = "deployment"
+is_public = true
+replicas = 2
+cpu_request = "100m"
+cpu_limit = "500m"
+memory_request = "128Mi"
+memory_limit = "256Mi"
+hpa_min = 2
+hpa_max = 6
+hpa_target_cpu_pct = 75
+
+  [[workloads.containers]]
+  name = "app"
+  is_primary = true
+  image_ref = "docker.io/calliopeai/astrolift-sample-api:latest"
+  port = 8080
+  command = ["python", "entrypoint.py", "web"]
+
+    [workloads.containers.env]
+    LOG_LEVEL = "info"
+    PORT = "8080"
+
+    [workloads.containers.healthcheck]
+    kind = "http"
+    value = "/health"
+    port = 8080
+
+[[workloads]]
+name = "worker"
+kind = "deployment"
+replicas = 1
+cpu_request = "100m"
+cpu_limit = "500m"
+memory_request = "128Mi"
+memory_limit = "256Mi"
+
+  [[workloads.containers]]
+  name = "worker"
+  is_primary = true
+  image_ref = "docker.io/calliopeai/astrolift-sample-api:latest"
+  port = 0
+  command = ["python", "entrypoint.py", "worker"]
+
+    [workloads.containers.env]
+    LOG_LEVEL = "info"
+
+[[managed_services]]
+kind = "postgres"
+name = "records"
+variant = "rds"
+
+[[managed_services]]
+kind = "redis"
+name = "cache"
+variant = "elasticache"
+
+[[managed_services]]
+kind = "queue"
+name = "jobs"
+variant = "sqs"
+
+[[managed_services]]
+kind = "object_store"
+name = "archive"
+variant = "s3"
